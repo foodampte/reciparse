@@ -1,45 +1,50 @@
-"""Scraper registry — maps URLs to the correct scraper class."""
+"""Registry for mapping URLs to their appropriate scraper implementations."""
 
-from typing import List, Type
+from typing import Type
 
-from reciparse.scrapers.base import BaseScraper
-from reciparse.scrapers.allrecipes import AllRecipesScraper
-
-# Register all available scrapers here
-_SCRAPERS: List[Type[BaseScraper]] = [
-    AllRecipesScraper,
-]
+from .base import BaseScraper
+from .allrecipes import AllRecipesScraper
+from .foodnetwork import FoodNetworkScraper
 
 
 class UnsupportedSiteError(Exception):
-    """Raised when no scraper supports the given URL."""
+    """Raised when no scraper is available for the given URL."""
+
+    def __init__(self, url: str) -> None:
+        super().__init__(f"No scraper available for URL: {url}")
+        self.url = url
+
+
+_SCRAPERS: list[Type[BaseScraper]] = [
+    AllRecipesScraper,
+    FoodNetworkScraper,
+]
 
 
 def get_scraper(url: str) -> BaseScraper:
-    """
-    Return an instantiated scraper for the given URL.
+    """Return an instantiated scraper that supports the given URL.
 
     Raises:
         UnsupportedSiteError: If no registered scraper supports the URL.
     """
     for scraper_cls in _SCRAPERS:
-        if scraper_cls.supports(url):
-            return scraper_cls(url)
-    supported = ", ".join(
-        domain
-        for cls in _SCRAPERS
-        for domain in cls.SUPPORTED_DOMAINS
-    )
-    raise UnsupportedSiteError(
-        f"No scraper available for: {url}\n"
-        f"Supported sites: {supported}"
-    )
+        instance = scraper_cls()
+        if instance.supports(url):
+            return instance
+    raise UnsupportedSiteError(url)
 
 
-def list_supported_domains() -> List[str]:
-    """Return a sorted list of all supported domains."""
-    return sorted(
-        domain
-        for cls in _SCRAPERS
-        for domain in cls.SUPPORTED_DOMAINS
-    )
+def list_supported_domains() -> list[str]:
+    """Return a sorted list of domains supported by registered scrapers."""
+    domains = []
+    for scraper_cls in _SCRAPERS:
+        domain = getattr(scraper_cls, "DOMAIN", None)
+        if domain:
+            domains.append(domain)
+    return sorted(domains)
+
+
+def register_scraper(scraper_cls: Type[BaseScraper]) -> None:
+    """Register a custom scraper class at runtime."""
+    if scraper_cls not in _SCRAPERS:
+        _SCRAPERS.append(scraper_cls)
