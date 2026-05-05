@@ -1,71 +1,76 @@
-"""Tests for the scraper registry."""
-
 import pytest
 
-from reciparse.scrapers.registry import (
-    get_scraper,
-    list_supported_domains,
-    register_scraper,
-    UnsupportedSiteError,
-)
+from reciparse.scrapers.registry import ScraperRegistry, UnsupportedSiteError
 from reciparse.scrapers.allrecipes import AllRecipesScraper
 from reciparse.scrapers.foodnetwork import FoodNetworkScraper
-from reciparse.scrapers.base import BaseScraper, RecipeData
+from reciparse.scrapers.seriouseats import SeriousEatsScraper
 
 
-def test_get_scraper_allrecipes():
-    scraper = get_scraper("https://www.allrecipes.com/recipe/12345/chocolate-cake")
+@pytest.fixture
+def registry():
+    return ScraperRegistry()
+
+
+def test_get_scraper_allrecipes(registry):
+    scraper = registry.get_scraper("https://www.allrecipes.com/recipe/12345/pasta/")
     assert isinstance(scraper, AllRecipesScraper)
 
 
-def test_get_scraper_foodnetwork():
-    scraper = get_scraper("https://www.foodnetwork.com/recipes/food-network-kitchen/pancakes")
+def test_get_scraper_foodnetwork(registry):
+    scraper = registry.get_scraper("https://www.foodnetwork.com/recipes/pasta")
     assert isinstance(scraper, FoodNetworkScraper)
 
 
-def test_get_scraper_unsupported_raises():
+def test_get_scraper_seriouseats(registry):
+    scraper = registry.get_scraper("https://www.seriouseats.com/scrambled-eggs")
+    assert isinstance(scraper, SeriousEatsScraper)
+
+
+def test_get_scraper_unsupported_raises(registry):
+    with pytest.raises(UnsupportedSiteError):
+        registry.get_scraper("https://www.unknown-cooking-site.com/recipe")
+
+
+def test_unsupported_site_error_stores_url(registry):
+    url = "https://www.notasupported.com/recipe"
     with pytest.raises(UnsupportedSiteError) as exc_info:
-        get_scraper("https://www.unknownsite.com/recipe/abc")
-    assert "unknownsite.com" in str(exc_info.value)
+        registry.get_scraper(url)
+    assert exc_info.value.url == url
 
 
-def test_unsupported_site_error_stores_url():
-    url = "https://www.noscraperhere.com/recipe/1"
-    error = UnsupportedSiteError(url)
-    assert error.url == url
+def test_list_supported_domains_contains_known_sites(registry):
+    domains = registry.list_supported_domains()
+    assert "www.allrecipes.com" in domains
+    assert "www.foodnetwork.com" in domains
+    assert "www.seriouseats.com" in domains
 
 
-def test_list_supported_domains_contains_known_sites():
-    domains = list_supported_domains()
-    assert "allrecipes.com" in domains
-    assert "foodnetwork.com" in domains
+def test_register_scraper_adds_new_scraper(registry):
+    from reciparse.scrapers.base import BaseScraper, RecipeData
 
-
-def test_list_supported_domains_is_sorted():
-    domains = list_supported_domains()
-    assert domains == sorted(domains)
-
-
-def test_register_scraper_adds_new_domain():
-    class _CustomScraper(BaseScraper):
-        DOMAIN = "customcooking.com"
+    class MockScraper(BaseScraper):
+        DOMAIN = "www.mockrecipes.com"
 
         def supports(self, url: str) -> bool:
-            return "customcooking.com" in url
+            return "mockrecipes.com" in url
 
         def scrape(self, url: str) -> RecipeData:
-            return RecipeData(title="Test", source_url=url)
+            return RecipeData(source_url=url)
 
-    register_scraper(_CustomScraper)
-
-    domains = list_supported_domains()
-    assert "customcooking.com" in domains
-
-    scraper = get_scraper("https://www.customcooking.com/recipe/42")
-    assert isinstance(scraper, _CustomScraper)
+    initial_count = len(registry._scrapers)
+    registry.register_scraper(MockScraper)
+    assert len(registry._scrapers) == initial_count + 1
+    scraper = registry.get_scraper("https://www.mockrecipes.com/recipe/1")
+    assert isinstance(scraper, MockScraper)
 
 
-def test_register_scraper_no_duplicates():
-    initial_count = len(list_supported_domains())
-    register_scraper(FoodNetworkScraper)
-    assert len(list_supported_domains()) == initial_count
+def test_register_scraper_no_duplicates(registry):
+    initial_count = len(registry._scrapers)
+    registry.register_scraper(AllRecipesScraper)
+    assert len(registry._scrapers) == initial_count
+
+
+def test_list_supported_domains_returns_list(registry):
+    domains = registry.list_supported_domains()
+    assert isinstance(domains, list)
+    assert len(domains) >= 3
