@@ -64,6 +64,14 @@ reciparse https://www.foodnetwork.com/recipes/some-recipe --format csv --output 
 | `--format` | Output format: `json` (default) or `csv` |
 | `--output` | Save to a file instead of stdout |
 | `--pretty` | Pretty-print JSON output |
+| `--timeout` | Request timeout in seconds (default: 10) |
+| `--no-cache` | Disable caching of previously fetched URLs |
+
+---
+
+## Contributing
+
+Bug reports and pull requests are welcome. Please open an issue first to discuss any significant changes.
 
 ---
 
