@@ -1,0 +1,67 @@
+import re
+from urllib.parse import urlparse
+
+import requests
+from bs4 import BeautifulSoup
+
+from .base import BaseScraper, RecipeData
+
+
+class LoveAndLemonsScraper(BaseScraper):
+    """Scraper for loveandlemons.com recipes."""
+
+    DOMAIN = "loveandlemons.com"
+
+    @staticmethod
+    def supports(url: str) -> bool:
+        host = urlparse(url).hostname or ""
+        return host == "www.loveandlemons.com" or host == "loveandlemons.com"
+
+    def scrape(self, url: str) -> RecipeData:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        return RecipeData(
+            title=self._parse_title(soup),
+            description=self._parse_description(soup),
+            ingredients=self._parse_ingredients(soup),
+            instructions=self._parse_instructions(soup),
+            prep_time=self._parse_prep_time(soup),
+            cook_time=self._parse_cook_time(soup),
+            servings=self._parse_servings(soup),
+            source_url=url,
+        )
+
+    def _parse_title(self, soup: BeautifulSoup) -> str:
+        tag = soup.find("h2", class_=re.compile(r"wprm-recipe-name", re.I))
+        if tag:
+            return tag.get_text(strip=True)
+        og = soup.find("meta", property="og:title")
+        return og["content"].strip() if og and og.get("content") else ""
+
+    def _parse_description(self, soup: BeautifulSoup) -> str:
+        tag = soup.find("div", class_=re.compile(r"wprm-recipe-summary", re.I))
+        if tag:
+            return tag.get_text(strip=True)
+        meta = soup.find("meta", attrs={"name": "description"})
+        return meta["content"].strip() if meta and meta.get("content") else ""
+
+    def _parse_ingredients(self, soup: BeautifulSoup) -> list[str]:
+        items = soup.find_all("li", class_=re.compile(r"wprm-recipe-ingredient", re.I))
+        return [li.get_text(strip=True) for li in items if li.get_text(strip=True)]
+
+    def _parse_instructions(self, soup: BeautifulSoup) -> list[str]:
+        items = soup.find_all("div", class_=re.compile(r"wprm-recipe-instruction-text", re.I))
+        return [div.get_text(strip=True) for div in items if div.get_text(strip=True)]
+
+    def _parse_prep_time(self, soup: BeautifulSoup) -> str:
+        tag = soup.find("span", class_=re.compile(r"wprm-recipe-prep_time-container", re.I))
+        return tag.get_text(strip=True) if tag else ""
+
+    def _parse_cook_time(self, soup: BeautifulSoup) -> str:
+        tag = soup.find("span", class_=re.compile(r"wprm-recipe-cook_time-container", re.I))
+        return tag.get_text(strip=True) if tag else ""
+
+    def _parse_servings(self, soup: BeautifulSoup) -> str:
+        tag = soup.find("span", class_=re.compile(r"wprm-recipe-servings-container", re.I))
+        return tag.get_text(strip=True) if tag else ""
