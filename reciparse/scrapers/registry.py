@@ -1,56 +1,74 @@
-from typing import Dict, List, Optional, Type
+from urllib.parse import urlparse
 
-from reciparse.scrapers.base import BaseScraper
+from .allrecipes import AllRecipesScraper
+from .bonappetit import BonAppetitScraper
+from .budgetbytes import BudgetBytesScraper
+from .cookinglight import CookingLightScraper
+from .delish import DelishScraper
+from .epicurious import EpicuriousScraper
+from .foodnetwork import FoodNetworkScraper
+from .kingarthurbaking import KingArthurBakingScraper
+from .NYTCooking import NYTCookingScraper
+from .seriouseats import SeriousEatsScraper
+from .simplyrecipes import SimplyRecipesScraper
+from .tasty import TastyScraper
+from .thekitchn import TheKitchnScraper
+from .base import BaseScraper
 
 
 class UnsupportedSiteError(Exception):
-    """Raised when no scraper is found for a given URL."""
-
-    def __init__(self, url: str) -> None:
-        super().__init__(f"No scraper available for URL: {url}")
-        self.url = url
+    """Raised when no scraper supports the given URL."""
 
 
 class ScraperRegistry:
     """Registry that maps URLs to the appropriate scraper."""
 
     def __init__(self) -> None:
-        self._scrapers: List[Type[BaseScraper]] = []
+        self._scrapers: list[type[BaseScraper]] = []
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        from reciparse.scrapers.allrecipes import AllRecipesScraper
-        from reciparse.scrapers.foodnetwork import FoodNetworkScraper
-        from reciparse.scrapers.seriouseats import SeriousEatsScraper
-        from reciparse.scrapers.epicurious import EpicuriousScraper
-        from reciparse.scrapers.bonappetit import BonAppetitScraper
-
-        for cls in [
+        default_scrapers = [
             AllRecipesScraper,
-            FoodNetworkScraper,
-            SeriousEatsScraper,
-            EpicuriousScraper,
             BonAppetitScraper,
-        ]:
-            self.register(cls)
+            BudgetBytesScraper,
+            CookingLightScraper,
+            DelishScraper,
+            EpicuriousScraper,
+            FoodNetworkScraper,
+            KingArthurBakingScraper,
+            NYTCookingScraper,
+            SeriousEatsScraper,
+            SimplyRecipesScraper,
+            TastyScraper,
+            TheKitchnScraper,
+        ]
+        for scraper_cls in default_scrapers:
+            self.register(scraper_cls)
 
-    def register(self, scraper_cls: Type[BaseScraper]) -> None:
+    def register(self, scraper_cls: type[BaseScraper]) -> None:
         """Register a scraper class."""
         if scraper_cls not in self._scrapers:
             self._scrapers.append(scraper_cls)
 
     def get_scraper(self, url: str) -> BaseScraper:
-        """Return an instantiated scraper that supports the given URL."""
-        for cls in self._scrapers:
-            if cls.supports(url):
-                return cls()
-        raise UnsupportedSiteError(url)
+        """Return an instantiated scraper that supports *url*.
 
-    def supported_domains(self) -> List[str]:
-        """Return a list of supported domain strings."""
+        Raises:
+            UnsupportedSiteError: if no registered scraper supports the URL.
+        """
+        for scraper_cls in self._scrapers:
+            if scraper_cls.supports(url):
+                return scraper_cls()
+        hostname = urlparse(url).hostname or url
+        raise UnsupportedSiteError(f"No scraper available for: {hostname}")
+
+    @property
+    def supported_domains(self) -> list[str]:
+        """Return a sorted list of supported domain strings."""
         domains = []
-        for cls in self._scrapers:
-            domain = getattr(cls, "DOMAIN", None)
+        for scraper_cls in self._scrapers:
+            domain = getattr(scraper_cls, "DOMAIN", None)
             if domain:
                 domains.append(domain)
-        return domains
+        return sorted(domains)
